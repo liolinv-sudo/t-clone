@@ -77,7 +77,47 @@ app.post('/zones', async (req, res) => {
   }
 });
 
-// Starta servern
+// ===== TEMPORÄR ROUTE FÖR ATT SKAPA TABELLER =====
+// (Lägg den här – före app.listen)
+app.get('/init-db', async (req, res) => {
+  try {
+    await pool.query(`CREATE EXTENSION IF NOT EXISTS postgis;`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash TEXT,
+        total_points INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS zones (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        location GEOGRAPHY(POINT, 4326) NOT NULL,
+        owner_id INTEGER REFERENCES users(id),
+        points_value INTEGER DEFAULT 100,
+        pph INTEGER DEFAULT 5,
+        last_taken TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS zones_location_idx ON zones USING GIST (location);
+    `);
+
+    res.json({ success: true, message: 'Tabeller skapade / uppdaterade!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Starta servern (denna ska alltid vara sist)
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
