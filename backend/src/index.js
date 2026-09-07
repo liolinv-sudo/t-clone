@@ -119,8 +119,12 @@ app.get('/init-db', async (req, res) => {
 
 
 // Temporär route för att lägga in testzoner
+// Temporär route för att lägga in testzoner
 app.get('/seed-zones', async (req, res) => {
   try {
+    // Rensa gamla testzoner först (valfritt)
+    await pool.query(`DELETE FROM zones WHERE name IN ('Gamla Stan', 'Slussen', 'Södermalm Torg', 'Kungsträdgården', 'Centralstationen')`);
+
     const zones = [
       { name: 'Gamla Stan', lat: 59.3251, lng: 18.0711 },
       { name: 'Slussen', lat: 59.3197, lng: 18.0720 },
@@ -132,13 +136,17 @@ app.get('/seed-zones', async (req, res) => {
     for (const zone of zones) {
       await pool.query(
         `INSERT INTO zones (name, location, points_value, pph)
-         VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326), 150, 6)
-         ON CONFLICT DO NOTHING`,
-        [zone.name, zone.lng, zone.lat]
+         VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $5)`,
+        [zone.name, zone.lng, zone.lat, 150, 6]
       );
     }
 
-    res.json({ success: true, message: 'Testzoner tillagda!' });
+    const count = await pool.query('SELECT COUNT(*) FROM zones');
+    res.json({ 
+      success: true, 
+      message: 'Testzoner tillagda!', 
+      totalZones: count.rows[0].count 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
