@@ -117,6 +117,34 @@ app.get('/init-db', async (req, res) => {
   }
 });
 
+
+// Temporär route för att lägga in testzoner
+app.get('/seed-zones', async (req, res) => {
+  try {
+    const zones = [
+      { name: 'Gamla Stan', lat: 59.3251, lng: 18.0711 },
+      { name: 'Slussen', lat: 59.3197, lng: 18.0720 },
+      { name: 'Södermalm Torg', lat: 59.3128, lng: 18.0755 },
+      { name: 'Kungsträdgården', lat: 59.3315, lng: 18.0719 },
+      { name: 'Centralstationen', lat: 59.3307, lng: 18.0585 }
+    ];
+
+    for (const zone of zones) {
+      await pool.query(
+        `INSERT INTO zones (name, location, points_value, pph)
+         VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326), 150, 6)
+         ON CONFLICT DO NOTHING`,
+        [zone.name, zone.lng, zone.lat]
+      );
+    }
+
+    res.json({ success: true, message: 'Testzoner tillagda!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Starta servern (denna ska alltid vara sist)
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
