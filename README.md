@@ -11,3 +11,13 @@ En förenklad version av det location-based spelet Turf.
 1. Klona repot
 2. Sätt upp backend (se `backend/README.md`)
 3. Sätt upp frontend (se `frontend/README.md`)
+
+# Frontend
+
+React + Vite + Leaflet + OpenStreetMap
+
+## Installation
+```bash
+cd frontend
+npm install
+npm run dev
