@@ -11,7 +11,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const API_URL = 'https://DIN-BACKEND-ADRESS.onrender.com'  // <-- Byt ut denna!
+const API_URL = 'https://t-clone-api.onrender.com'  // <-- Byt ut denna!
 
 function App() {
   const [zones, setZones] = useState([])
