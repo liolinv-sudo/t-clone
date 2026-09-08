@@ -222,6 +222,69 @@ app.post('/zones/:id/takeover', async (req, res) => {
   }
 });
 
+
+// Enkel GET-version för att testa takeover i webbläsaren
+app.get('/takeover-test/:id', async (req, res) => {
+  const zoneId = req.params.id;
+  const username = req.query.username || 'TestSpelare';
+
+  try {
+    // 1. Hitta eller skapa användaren
+    let userResult = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
+
+    let userId;
+    if (userResult.rows.length === 0) {
+      const newUser = await pool.query(
+        'INSERT INTO users (username, total_points) VALUES ($1, 0) RETURNING id',
+        [username]
+      );
+      userId = newUser.rows[0].id;
+    } else {
+      userId = userResult.rows[0].id;
+    }
+
+    // 2. Hämta zonen
+    const zoneResult = await pool.query(
+      'SELECT id, name, points_value FROM zones WHERE id = $1',
+      [zoneId]
+    );
+
+    if (zoneResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Zonen finns inte' });
+    }
+
+    const zone = zoneResult.rows[0];
+
+    // 3. Uppdatera zonen
+    await pool.query(
+      `UPDATE zones SET owner_id = $1, last_taken = NOW() WHERE id = $2`,
+      [userId, zoneId]
+    );
+
+    // 4. Ge poäng
+    const points = zone.points_value || 100;
+    await pool.query(
+      'UPDATE users SET total_points = total_points + $1 WHERE id = $2',
+      [points, userId]
+    );
+
+    res.json({
+      success: true,
+      message: `Du tog över zonen "${zone.name}"!`,
+      pointsEarned: points,
+      zoneId: zone.id,
+      newOwner: username
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Starta servern (denna ska alltid vara sist)
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
