@@ -124,33 +124,71 @@ app.get('/init-db', async (req, res) => {
 
 // Temporär route för att lägga in testzoner
 // Temporär route för att lägga in testzoner
+// Lägg in många zoner över Storstockholm
 app.get('/seed-zones', async (req, res) => {
   try {
-    // Rensa gamla testzoner först (valfritt)
-    await pool.query(`DELETE FROM zones WHERE name IN ('Gamla Stan', 'Slussen', 'Södermalm Torg', 'Kungsträdgården', 'Centralstationen')`);
+    // Rensa gamla testzoner
+    await pool.query('DELETE FROM zones');
 
     const zones = [
+      // Centrala Stockholm
       { name: 'Gamla Stan', lat: 59.3251, lng: 18.0711 },
       { name: 'Slussen', lat: 59.3197, lng: 18.0720 },
       { name: 'Södermalm Torg', lat: 59.3128, lng: 18.0755 },
       { name: 'Kungsträdgården', lat: 59.3315, lng: 18.0719 },
-      { name: 'Centralstationen', lat: 59.3307, lng: 18.0585 }
+      { name: 'Centralstationen', lat: 59.3307, lng: 18.0585 },
+      { name: 'Hötorget', lat: 59.3345, lng: 18.0635 },
+      { name: 'Sergels Torg', lat: 59.3325, lng: 18.0650 },
+      { name: 'Medborgarplatsen', lat: 59.3145, lng: 18.0725 },
+      { name: 'Mariatorget', lat: 59.3180, lng: 18.0620 },
+      { name: 'Hornstull', lat: 59.3155, lng: 18.0330 },
+
+      // Södermalm & omkring
+      { name: 'Fatburen', lat: 59.3100, lng: 18.0650 },
+      { name: 'Tantolunden', lat: 59.3135, lng: 18.0450 },
+      { name: 'Årstabron', lat: 59.3020, lng: 18.0450 },
+      { name: 'Liljeholmen', lat: 59.3105, lng: 18.0220 },
+
+      // Kungsholmen
+      { name: 'Fridhemsplan', lat: 59.3335, lng: 18.0280 },
+      { name: 'Rådhuset', lat: 59.3285, lng: 18.0400 },
+      { name: 'Stadshuset', lat: 59.3273, lng: 18.0545 },
+
+      // Östermalm / Djurgården
+      { name: 'Östermalmstorg', lat: 59.3365, lng: 18.0780 },
+      { name: 'Karlaplan', lat: 59.3380, lng: 18.0900 },
+      { name: 'Djurgårdsbron', lat: 59.3280, lng: 18.1000 },
+      { name: 'Skansen', lat: 59.3255, lng: 18.1030 },
+
+      // Norrmalm / Vasastan
+      { name: 'Odenplan', lat: 59.3430, lng: 18.0500 },
+      { name: 'St:Eriksplan', lat: 59.3400, lng: 18.0350 },
+      { name: 'Sankt Eriksgatan', lat: 59.3370, lng: 18.0300 },
+
+      // Lite längre ut
+      { name: 'Gullmarsplan', lat: 59.2985, lng: 18.0800 },
+      { name: 'Globen', lat: 59.2935, lng: 18.0830 },
+      { name: 'Hammarby Sjöstad', lat: 59.3020, lng: 18.1050 },
+      { name: 'Sickla', lat: 59.3050, lng: 18.1250 },
+      { name: 'Nacka Forum', lat: 59.3100, lng: 18.1550 },
+      { name: 'Solna Centrum', lat: 59.3600, lng: 17.9980 },
+      { name: 'Sundbyberg', lat: 59.3610, lng: 17.9700 },
+      { name: 'Alvik', lat: 59.3330, lng: 17.9800 },
+      { name: 'Brommaplan', lat: 59.3380, lng: 17.9400 },
+      { name: 'Täby Centrum', lat: 59.4440, lng: 18.0680 },
+      { name: 'Kista', lat: 59.4030, lng: 17.9440 }
     ];
 
     for (const zone of zones) {
       await pool.query(
         `INSERT INTO zones (name, location, points_value, pph)
-         VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $5)`,
-        [zone.name, zone.lng, zone.lat, 150, 6]
+         VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, 150, 6)`,
+        [zone.name, zone.lng, zone.lat]
       );
     }
 
     const count = await pool.query('SELECT COUNT(*) FROM zones');
-    res.json({ 
-      success: true, 
-      message: 'Testzoner tillagda!', 
-      totalZones: count.rows[0].count 
-    });
+    res.json({ success: true, message: 'Zoner tillagda!', totalZones: count.rows[0].count });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: err.message });
