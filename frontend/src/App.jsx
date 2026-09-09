@@ -12,7 +12,7 @@ L.Icon.Default.mergeOptions({
 })
 
 // Byt ut till din riktiga backend-adress!
-const API_URL = 'https://DIN-RIKTIGA-BACKEND.onrender.com'
+const API_URL = 'https://t-clone-api.onrender.com'
 
 function App() {
   const [zones, setZones] = useState([])
