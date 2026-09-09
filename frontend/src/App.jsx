@@ -3,7 +3,6 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-// Fixa Leaflet-ikoner
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -11,7 +10,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const API_URL = 'https://t-clone-api.onrender.com/' // <-- Byt till din backend-adress!
+const API_URL = 'https://t-clone-api.onrender.com'
 
 function App() {
   const [zones, setZones] = useState([])
@@ -19,13 +18,20 @@ function App() {
 
   useEffect(() => {
     fetch(`${API_URL}/zones`)
-      .then(res => res.json())
-      .then(data => {
-        setZones(data)
-        setStatus(`Hittade ${data.length} zoner`)
+      .then(async (res) => {
+        const text = await res.text()   // Läs som text först
+        console.log('Svar från backend:', text)
+
+        try {
+          const data = JSON.parse(text)
+          setZones(data)
+          setStatus(`Hittade ${data.length} zoner`)
+        } catch (err) {
+          setStatus(`Fick inte JSON. Svar började med: ${text.substring(0, 80)}...`)
+        }
       })
       .catch(err => {
-        setStatus('Kunde inte hämta zoner: ' + err.message)
+        setStatus('Nätverksfel: ' + err.message)
       })
   }, [])
 
@@ -40,7 +46,8 @@ function App() {
         padding: '10px 14px',
         borderRadius: '8px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        fontSize: '14px'
+        fontSize: '14px',
+        maxWidth: '90%'
       }}>
         {status}
       </div>
