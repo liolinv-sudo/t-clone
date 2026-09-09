@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-// Fixa standardikoner i Leaflet
+// Fixa Leaflet-ikoner
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -11,20 +11,43 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const API_URL = 'https://t-clone-api.onrender.com'  // <-- Byt ut denna!
+// Byt ut till din riktiga backend-adress!
+const API_URL = 'https://DIN-RIKTIGA-BACKEND.onrender.com'
 
 function App() {
   const [zones, setZones] = useState([])
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     fetch(`${API_URL}/zones`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('Kunde inte hämta zoner')
+        return res.json()
+      })
       .then(data => setZones(data))
-      .catch(err => console.error(err))
+      .catch(err => {
+        console.error(err)
+        setError(err.message)
+      })
   }, [])
 
   return (
-    <div style={{ height: '100vh', width: '100%' }}>
+    <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
+      {error && (
+        <div style={{ 
+          position: 'absolute', 
+          top: 10, 
+          left: 10, 
+          zIndex: 1000, 
+          background: 'white', 
+          padding: '10px',
+          borderRadius: '5px',
+          boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+        }}>
+          Fel: {error}
+        </div>
+      )}
+
       <MapContainer 
         center={[59.33, 18.07]} 
         zoom={13} 
@@ -40,7 +63,6 @@ function App() {
             <Popup>
               <strong>{zone.name}</strong><br />
               Poäng: {zone.points_value}<br />
-              PPH: {zone.pph}<br />
               ID: {zone.id}
             </Popup>
           </Marker>
