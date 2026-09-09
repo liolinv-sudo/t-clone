@@ -123,7 +123,6 @@ app.get('/init-db', async (req, res) => {
 
 
 // Temporär route för att lägga in testzoner
-// Temporär route för att lägga in testzoner
 // Lägg in många zoner över Storstockholm
 app.get('/seed-zones', async (req, res) => {
   try {
@@ -271,13 +270,10 @@ app.get('/takeover-test/:id', async (req, res) => {
   const username = req.query.username || 'TestSpelare';
 
   try {
-    // 1. Hitta eller skapa användaren
-    let userResult = await pool.query(
-      'SELECT id FROM users WHERE username = $1',
-      [username]
-    );
+    // Hitta eller skapa användare
+    let userResult = await pool.query('SELECT id, total_points FROM users WHERE username = $1', [username]);
+    let userId, userPoints = 0;
 
-    let userId;
     if (userResult.rows.length === 0) {
       const newUser = await pool.query(
         'INSERT INTO users (username, total_points) VALUES ($1, 0) RETURNING id',
@@ -286,11 +282,17 @@ app.get('/takeover-test/:id', async (req, res) => {
       userId = newUser.rows[0].id;
     } else {
       userId = userResult.rows[0].id;
+      userPoints = userResult.rows[0].total_points;
     }
 
-    // 2. Hämta zonen
+    // Beräkna enkel level (var 1000 poäng = 1 level)
+    const level = Math.floor(userPoints / 1000) + 1;
+    const blockMinutes = 5 + (level * 2); // högre level = längre blocktid
+
+    // Hämta zonen
     const zoneResult = await pool.query(
-      'SELECT id, name, points_value FROM zones WHERE id = $1',
+      `SELECT id, name, owner_id, points_value, last_taken 
+       FROM zones WHERE id = $1`,
       [zoneId]
     );
 
@@ -300,14 +302,32 @@ app.get('/takeover-test/:id', async (req, res) => {
 
     const zone = zoneResult.rows[0];
 
-    // 3. Uppdatera zonen
+    // Kolla blocktid
+    if (zone.last_taken) {
+      const lastTaken = new Date(zone.last_taken);
+      const now = new Date();
+      const diffMinutes = (now - lastTaken) / (1000 * 60);
+
+      if (diffMinutes < blockMinutes) {
+        return res.json({
+          success: false,
+          message: `Zonen är blockerad i ytterligare ${Math.ceil(blockMinutes - diffMinutes)} minuter`
+        });
+      }
+    }
+
+    // Räkna poäng (extra 50 om neutral)
+    let points = zone.points_value || 150;
+    if (!zone.owner_id) {
+      points += 50; // neutral zon ger bonus
+    }
+
+    // Ta över
     await pool.query(
       `UPDATE zones SET owner_id = $1, last_taken = NOW() WHERE id = $2`,
       [userId, zoneId]
     );
 
-    // 4. Ge poäng
-    const points = zone.points_value || 100;
     await pool.query(
       'UPDATE users SET total_points = total_points + $1 WHERE id = $2',
       [points, userId]
@@ -315,10 +335,11 @@ app.get('/takeover-test/:id', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Du tog över zonen "${zone.name}"!`,
+      message: `Du tog över "${zone.name}"!`,
       pointsEarned: points,
-      zoneId: zone.id,
-      newOwner: username
+      newOwner: username,
+      level,
+      blockMinutes
     });
 
   } catch (err) {
