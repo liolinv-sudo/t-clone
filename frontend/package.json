@@ -1,9 +1,3 @@
-
----
-
-### 3. `frontend/package.json` (skapa denna fil också)
-
-```json
 {
   "name": "turf-clone-frontend",
   "private": true,
