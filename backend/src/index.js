@@ -49,12 +49,19 @@ app.get('/db-test', async (req, res) => {
 app.get('/zones', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, name, 
-             ST_Y(location::geometry) as lat, 
-             ST_X(location::geometry) as lng,
-             owner_id, points_value, pph
-      FROM zones
-      ORDER BY id
+      SELECT
+        z.id,
+        z.name,
+        ST_Y(z.location::geometry) AS lat,
+        ST_X(z.location::geometry) AS lng,
+        z.owner_id,
+        z.points_value,
+        z.pph,
+        z.last_taken,
+        u.username AS owner_name
+      FROM zones z
+      LEFT JOIN users u ON u.id = z.owner_id
+      ORDER BY z.id
     `);
     res.json(result.rows);
   } catch (err) {
@@ -270,29 +277,32 @@ app.get('/takeover-test/:id', async (req, res) => {
   const username = req.query.username || 'TestSpelare';
 
   try {
-    // Hitta eller skapa användare
-    let userResult = await pool.query('SELECT id, total_points FROM users WHERE username = $1', [username]);
-    let userId, userPoints = 0;
+    let userResult = await pool.query(
+      'SELECT id, total_points FROM users WHERE username = $1',
+      [username]
+    );
+
+    let userId;
+    let userPoints = 0;
 
     if (userResult.rows.length === 0) {
       const newUser = await pool.query(
-        'INSERT INTO users (username, total_points) VALUES ($1, 0) RETURNING id',
+        'INSERT INTO users (username, total_points) VALUES ($1, 0) RETURNING id, total_points',
         [username]
       );
       userId = newUser.rows[0].id;
+      userPoints = 0;
     } else {
       userId = userResult.rows[0].id;
       userPoints = userResult.rows[0].total_points;
     }
 
-    // Beräkna enkel level (var 1000 poäng = 1 level)
     const level = Math.floor(userPoints / 1000) + 1;
-    const blockMinutes = 5 + (level * 2); // högre level = längre blocktid
+    // Blocktid i minuter: minst 3 min, ökar med level
+    const blockMinutes = Math.max(3, 3 + level);
 
-    // Hämta zonen
     const zoneResult = await pool.query(
-      `SELECT id, name, owner_id, points_value, last_taken 
-       FROM zones WHERE id = $1`,
+      `SELECT id, name, owner_id, points_value, last_taken FROM zones WHERE id = $1`,
       [zoneId]
     );
 
@@ -302,46 +312,48 @@ app.get('/takeover-test/:id', async (req, res) => {
 
     const zone = zoneResult.rows[0];
 
-    // Kolla blocktid
+    // Blocktidskoll
     if (zone.last_taken) {
       const lastTaken = new Date(zone.last_taken);
       const now = new Date();
-      const diffMinutes = (now - lastTaken) / (1000 * 60);
+      const diffMs = now - lastTaken;
+      const diffMinutes = diffMs / (1000 * 60);
 
       if (diffMinutes < blockMinutes) {
+        const remainingSec = Math.ceil((blockMinutes * 60) - (diffMs / 1000));
+        const mins = Math.floor(remainingSec / 60);
+        const secs = remainingSec % 60;
         return res.json({
           success: false,
-          message: `Zonen är blockerad i ytterligare ${Math.ceil(blockMinutes - diffMinutes)} minuter`
+          blocked: true,
+          message: `Zonen är blockerad i ${mins} min ${secs} sek`,
+          remainingSeconds: remainingSec
         });
       }
     }
 
-    // Räkna poäng (extra 50 om neutral)
     let points = zone.points_value || 150;
-    if (!zone.owner_id) {
-      points += 50; // neutral zon ger bonus
-    }
+    if (!zone.owner_id) points += 50;
 
-    // Ta över
     await pool.query(
       `UPDATE zones SET owner_id = $1, last_taken = NOW() WHERE id = $2`,
       [userId, zoneId]
     );
 
-    await pool.query(
-      'UPDATE users SET total_points = total_points + $1 WHERE id = $2',
+    const updated = await pool.query(
+      'UPDATE users SET total_points = total_points + $1 WHERE id = $2 RETURNING total_points',
       [points, userId]
     );
 
     res.json({
       success: true,
-      message: `Du tog över "${zone.name}"!`,
+      message: `Du tog över "${zone.name}"! +${points} poäng`,
       pointsEarned: points,
-      newOwner: username,
+      totalPoints: updated.rows[0].total_points,
+      userId,
       level,
       blockMinutes
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
