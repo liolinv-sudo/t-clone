@@ -1,16 +1,38 @@
 import { useEffect, useState, useRef } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Popup,
+  useMap,
+} from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
 const API_URL = 'https://t-clone-api.onrender.com'
 const BASE_SECONDS = 15
 const GPS_SECONDS = 10
+const BLOCK_MINUTES = 5
 
 function formatTime(sec) {
   const s = Math.max(0, Math.floor(sec))
   const m = Math.floor(s / 60)
   const r = s % 60
   return `${m} min ${r} sek`
+}
+
+function MapController({ flyTarget, resetNorth }) {
+  const map = useMap()
+  useEffect(() => {
+    if (flyTarget) {
+      map.flyTo(flyTarget, 16, { duration: 1.2 })
+    }
+  }, [flyTarget, map])
+  useEffect(() => {
+    if (resetNorth) {
+      map.setView(map.getCenter(), map.getZoom())
+    }
+  }, [resetNorth, map])
+  return null
 }
 
 function App() {
@@ -28,23 +50,14 @@ function App() {
   const [myZones, setMyZones] = useState([])
   const [myUserId, setMyUserId] = useState(null)
   const [blockInfo, setBlockInfo] = useState({})
+  const [search, setSearch] = useState('')
+  const [flyTarget, setFlyTarget] = useState(null)
+  const [northTick, setNorthTick] = useState(0)
+  const [profile, setProfile] = useState(null)
+  const [showProfile, setShowProfile] = useState(false)
 
   const watchIdRef = useRef(null)
   const progressRef = useRef(null)
-
-  // Aktivera ljud (kräver klick)
-  const enableAudio = () => {
-    if (!window.speechSynthesis) {
-      setMessage('Röst stöds inte i denna webbläsare')
-      return
-    }
-    const u = new SpeechSynthesisUtterance('Audio on')
-    u.volume = 1
-    u.rate = 1
-    window.speechSynthesis.speak(u)
-    setAudioEnabled(true)
-    setMessage('Ljud aktiverat')
-  }
 
   const speak = (text) => {
     if (!audioEnabled || !window.speechSynthesis) return
@@ -61,7 +74,28 @@ function App() {
     window.speechSynthesis.speak(u)
   }
 
-  // GPS – startar bara när användaren sätter på
+  const enableAudio = () => {
+    if (!window.speechSynthesis) {
+      setMessage('Röst stöds inte här')
+      return
+    }
+    const u = new SpeechSynthesisUtterance('Audio on')
+    window.speechSynthesis.speak(u)
+    setAudioEnabled(true)
+    setMessage('Ljud på')
+  }
+
+  const toggleAudio = () => {
+    if (audioEnabled) {
+      window.speechSynthesis?.cancel()
+      setAudioEnabled(false)
+      setMessage('Ljud av')
+    } else {
+      enableAudio()
+    }
+  }
+
+  // GPS
   useEffect(() => {
     if (!gpsEnabled) {
       if (watchIdRef.current !== null) {
@@ -88,30 +122,33 @@ function App() {
     }
   }, [gpsEnabled])
 
+  const updateBlockInfo = (data) => {
+    const info = {}
+    const now = Date.now()
+    data.forEach((z) => {
+      if (z.last_taken) {
+        const end =
+          new Date(z.last_taken).getTime() + BLOCK_MINUTES * 60 * 1000
+        const left = Math.ceil((end - now) / 1000)
+        if (left > 0) info[z.id] = left
+      }
+    })
+    setBlockInfo(info)
+  }
+
   const fetchZones = () => {
     fetch(`${API_URL}/zones`)
       .then((r) => r.json())
       .then((data) => {
         setZones(data)
         setStatus(`${data.length} zoner`)
-        // Räkna ut blocktid per zon (minst 3 min)
-        const info = {}
-        const now = Date.now()
-        data.forEach((z) => {
-          if (z.last_taken) {
-            const blockMin = 3
-            const end = new Date(z.last_taken).getTime() + blockMin * 60 * 1000
-            const left = Math.ceil((end - now) / 1000)
-            if (left > 0) info[z.id] = left
-          }
-        })
-        setBlockInfo(info)
+        updateBlockInfo(data)
       })
       .catch(() => setStatus('Kunde inte hämta zoner'))
   }
 
-  const fetchPlayer = () => {
-    fetch(`${API_URL}/player/${encodeURIComponent(username)}`)
+  const fetchPlayer = (name = username) => {
+    fetch(`${API_URL}/player/${encodeURIComponent(name)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.exists) {
@@ -143,21 +180,29 @@ function App() {
     return () => clearInterval(t)
   }, [])
 
+  // Nytt spelarnamn → nollställ sessionräknare
   useEffect(() => {
-    fetchPlayer()
+    setZonesTakenCount(0)
+    setMyUserId(null)
+    setMyZones([])
+    setTotalPoints(0)
+    fetchPlayer(username)
   }, [username])
 
-  const canTake = () => gpsEnabled && playerPos !== null
+  const canTake = () => gpsEnabled === true && playerPos !== null
 
   const getSeconds = () => {
+    // Första zonen denna session: 15 s. Därefter 10 s bara om GPS+position.
     if (zonesTakenCount === 0) return BASE_SECONDS
-    return canTake() ? GPS_SECONDS : BASE_SECONDS
+    if (canTake()) return GPS_SECONDS
+    return BASE_SECONDS
   }
 
   const startTakeover = (zoneId) => {
     if (takingZoneId) return
+
     if (!canTake()) {
-      setMessage('Slå på GPS och vänta på position innan du tar zoner')
+      setMessage('GPS måste vara PÅ och position OK för att ta zon')
       return
     }
     if (blockInfo[zoneId] > 0) {
@@ -173,6 +218,14 @@ function App() {
 
     const start = Date.now()
     progressRef.current = setInterval(() => {
+      // Om GPS stängs av under tagning → avbryt
+      if (!gpsEnabled || !playerPos) {
+        clearInterval(progressRef.current)
+        setTakingZoneId(null)
+        setProgress(0)
+        setMessage('Zontagning avbruten – GPS krävs')
+        return
+      }
       const elapsed = (Date.now() - start) / 1000
       setProgress(Math.min(100, (elapsed / total) * 100))
       if (elapsed >= total) {
@@ -183,17 +236,37 @@ function App() {
   }
 
   const finishTakeover = (zoneId) => {
+    if (!gpsEnabled || !playerPos) {
+      setMessage('GPS krävs – tagning avbruten')
+      setTakingZoneId(null)
+      setProgress(0)
+      return
+    }
+
     fetch(
-      `${API_URL}/takeover-test/${zoneId}?username=${encodeURIComponent(username)}`
+      `${API_URL}/takeover-test/${zoneId}?username=${encodeURIComponent(
+        username
+      )}`
     )
       .then((r) => r.json())
       .then((data) => {
         setMessage(data.message || 'Fel')
+        if (data.blocked && data.remainingSeconds) {
+          setBlockInfo((prev) => ({
+            ...prev,
+            [zoneId]: data.remainingSeconds,
+          }))
+        }
         if (data.success) {
           speak('Zone taken')
           setZonesTakenCount((c) => c + 1)
           if (data.totalPoints != null) setTotalPoints(data.totalPoints)
           if (data.userId) setMyUserId(data.userId)
+          // Sätt block direkt lokalt
+          setBlockInfo((prev) => ({
+            ...prev,
+            [zoneId]: BLOCK_MINUTES * 60,
+          }))
           fetchZones()
           fetchPlayer()
         }
@@ -218,11 +291,47 @@ function App() {
     return 'red'
   }
 
+  const doSearch = () => {
+    const q = search.trim().toLowerCase()
+    if (!q) return
+
+    // Zonsök
+    const zone = zones.find((z) => z.name.toLowerCase().includes(q))
+    if (zone) {
+      setFlyTarget([zone.lat, zone.lng])
+      setShowProfile(false)
+      setMessage(`Visar zon: ${zone.name}`)
+      return
+    }
+
+    // Spelarsök
+    fetch(`${API_URL}/player/${encodeURIComponent(search.trim())}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.exists) {
+          setProfile(data)
+          setShowProfile(true)
+          setMessage(`Profil: ${data.username}`)
+        } else {
+          setMessage('Hittade varken zon eller spelare')
+          setShowProfile(false)
+        }
+      })
+      .catch(() => setMessage('Sökfel'))
+  }
+
+  const goNorth = () => {
+    if (playerPos) setFlyTarget([...playerPos])
+    setNorthTick((n) => n + 1)
+    setMessage('Norr upp / centrerad på dig')
+  }
+
   const total = getSeconds()
   const left = Math.ceil(total - (progress / 100) * total)
 
   return (
     <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
+      {/* Panel */}
       <div
         style={{
           position: 'absolute',
@@ -233,7 +342,7 @@ function App() {
           padding: 12,
           borderRadius: 8,
           boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-          maxWidth: 320,
+          maxWidth: 340,
           fontSize: 14,
         }}
       >
@@ -251,30 +360,121 @@ function App() {
         <div style={{ marginBottom: 6 }}>
           <strong>Egna zoner:</strong> {myZones.length}
           {myZones.length > 0 && (
-            <div style={{ fontSize: 12, color: '#333' }}>
+            <div style={{ fontSize: 12 }}>
               {myZones.map((z) => z.name).join(', ')}
             </div>
           )}
         </div>
-        <div style={{ marginBottom: 6 }}>
+
+        <div style={{ marginBottom: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button onClick={() => setGpsEnabled((v) => !v)}>
             GPS: {gpsEnabled ? 'På' : 'Av'}
-          </button>{' '}
-          <span style={{ fontSize: 12 }}>
-            {playerPos ? 'Position OK' : 'Ingen position'}
-          </span>
-        </div>
-        <div style={{ marginBottom: 6 }}>
-          <button onClick={enableAudio}>
-            Ljud: {audioEnabled ? 'På' : 'Aktivera ljud'}
+          </button>
+          <button onClick={toggleAudio}>
+            Ljud: {audioEnabled ? 'På' : 'Av'}
           </button>
         </div>
+        <div style={{ fontSize: 12, marginBottom: 6 }}>
+          {playerPos ? 'Position OK' : 'Ingen position'}
+          {' · '}
+          Taketid: {getSeconds()} s
+        </div>
+
+        <div style={{ marginBottom: 6 }}>
+          <input
+            placeholder="Sök zon eller spelare"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && doSearch()}
+            style={{ padding: 4, width: 180 }}
+          />
+          <button onClick={doSearch} style={{ marginLeft: 4 }}>
+            Sök
+          </button>
+        </div>
+
         <div>{status}</div>
         {message && (
           <div style={{ marginTop: 6, color: '#06c' }}>{message}</div>
         )}
       </div>
 
+      {/* Kompass */}
+      <button
+        onClick={goNorth}
+        title="Norr upp / centrera på mig"
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          zIndex: 1000,
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          border: '2px solid #333',
+          background: 'white',
+          fontWeight: 'bold',
+          fontSize: 18,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ color: 'crimson' }}>N</span>
+      </button>
+
+      {/* Spelarprofil */}
+      {showProfile && profile && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 70,
+            right: 12,
+            zIndex: 1000,
+            background: 'white',
+            padding: 14,
+            borderRadius: 8,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+            width: 240,
+            fontSize: 14,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <strong>{profile.username}</strong>
+            <button onClick={() => setShowProfile(false)}>×</button>
+          </div>
+          <div>Poäng: {profile.total_points}</div>
+          <div style={{ marginTop: 8 }}>
+            <strong>Zoner ({profile.zones?.length || 0}):</strong>
+            <ul style={{ margin: '4px 0', paddingLeft: 18 }}>
+              {(profile.zones || []).map((z) => (
+                <li key={z.id}>
+                  <button
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#06c',
+                      cursor: 'pointer',
+                      padding: 0,
+                      textAlign: 'left',
+                    }}
+                    onClick={() => {
+                      const found = zones.find((x) => x.id === z.id)
+                      if (found) {
+                        setFlyTarget([found.lat, found.lng])
+                        setShowProfile(false)
+                      }
+                    }}
+                  >
+                    {z.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Progress */}
       {takingZoneId && (
         <div
           style={{
@@ -330,13 +530,20 @@ function App() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap"
         />
+        <MapController flyTarget={flyTarget} resetNorth={northTick} />
+
         {playerPos && (
           <CircleMarker
             center={playerPos}
             radius={9}
-            pathOptions={{ color: 'blue', fillColor: '#2196F3', fillOpacity: 0.9 }}
+            pathOptions={{
+              color: 'blue',
+              fillColor: '#2196F3',
+              fillOpacity: 0.9,
+            }}
           />
         )}
+
         {zones.map((zone) => (
           <CircleMarker
             key={zone.id}
@@ -370,15 +577,12 @@ function App() {
               <button
                 onClick={() => startTakeover(zone.id)}
                 disabled={
-                  !!takingZoneId ||
-                  !canTake() ||
-                  (blockInfo[zone.id] > 0)
+                  !!takingZoneId || !canTake() || blockInfo[zone.id] > 0
                 }
                 style={{
                   marginTop: 8,
                   padding: '6px 12px',
-                  opacity:
-                    !canTake() || blockInfo[zone.id] > 0 ? 0.5 : 1,
+                  opacity: !canTake() || blockInfo[zone.id] > 0 ? 0.5 : 1,
                   cursor:
                     !canTake() || blockInfo[zone.id] > 0
                       ? 'not-allowed'
