@@ -2,10 +2,11 @@ import { useEffect, useState, useRef } from 'react'
 import {
   MapContainer,
   TileLayer,
-  CircleMarker,
+  Marker,
   Popup,
   useMap,
 } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 const API_URL = 'https://t-clone-api.onrender.com'
@@ -20,18 +21,41 @@ function formatTime(sec) {
   return `${m} min ${r} sek`
 }
 
-function MapController({ flyTarget, resetNorth }) {
+function makePersonIcon(color) {
+  const bg = color === 'green' ? '#22c55e' : '#ef4444'
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:28px;height:28px;border-radius:50%;
+      background:${bg};border:2px solid #111;
+      display:flex;align-items:center;justify-content:center;
+      font-size:16px;box-shadow:0 1px 4px rgba(0,0,0,.4);
+    ">👤</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  })
+}
+
+function makeZoneIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:22px;height:22px;border-radius:50%;
+      background:${color};border:2px solid #333;
+      opacity:0.9;box-shadow:0 1px 3px rgba(0,0,0,.35);
+    "></div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  })
+}
+
+function MapController({ flyTarget }) {
   const map = useMap()
   useEffect(() => {
     if (flyTarget) {
-      map.flyTo(flyTarget, 16, { duration: 1.2 })
+      map.flyTo(flyTarget, 16, { duration: 1.0 })
     }
   }, [flyTarget, map])
-  useEffect(() => {
-    if (resetNorth) {
-      map.setView(map.getCenter(), map.getZoom())
-    }
-  }, [resetNorth, map])
   return null
 }
 
@@ -52,12 +76,24 @@ function App() {
   const [blockInfo, setBlockInfo] = useState({})
   const [search, setSearch] = useState('')
   const [flyTarget, setFlyTarget] = useState(null)
-  const [northTick, setNorthTick] = useState(0)
   const [profile, setProfile] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
+  const [tab, setTab] = useState(null) // 'leaderboard' | 'medals' | null
+  const [leaderboard, setLeaderboard] = useState([])
+  const [medals, setMedals] = useState([])
+  const [otherPlayers, setOtherPlayers] = useState([])
 
   const watchIdRef = useRef(null)
   const progressRef = useRef(null)
+  const gpsEnabledRef = useRef(false)
+  const playerPosRef = useRef(null)
+
+  useEffect(() => {
+    gpsEnabledRef.current = gpsEnabled
+  }, [gpsEnabled])
+  useEffect(() => {
+    playerPosRef.current = playerPos
+  }, [playerPos])
 
   const speak = (text) => {
     if (!audioEnabled || !window.speechSynthesis) return
@@ -65,7 +101,6 @@ function App() {
     const u = new SpeechSynthesisUtterance(text)
     u.lang = 'en-US'
     u.rate = 0.95
-    u.volume = 1
     const voices = window.speechSynthesis.getVoices()
     const female = voices.find((v) =>
       /female|samantha|zira|victoria|karen/i.test(v.name)
@@ -74,24 +109,15 @@ function App() {
     window.speechSynthesis.speak(u)
   }
 
-  const enableAudio = () => {
-    if (!window.speechSynthesis) {
-      setMessage('Röst stöds inte här')
-      return
-    }
-    const u = new SpeechSynthesisUtterance('Audio on')
-    window.speechSynthesis.speak(u)
-    setAudioEnabled(true)
-    setMessage('Ljud på')
-  }
-
   const toggleAudio = () => {
     if (audioEnabled) {
       window.speechSynthesis?.cancel()
       setAudioEnabled(false)
       setMessage('Ljud av')
-    } else {
-      enableAudio()
+    } else if (window.speechSynthesis) {
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance('Audio on'))
+      setAudioEnabled(true)
+      setMessage('Ljud på')
     }
   }
 
@@ -103,6 +129,7 @@ function App() {
         watchIdRef.current = null
       }
       setPlayerPos(null)
+      setZonesTakenCount(0) // återställ taketid till 15 s
       return
     }
     if (!navigator.geolocation) {
@@ -136,6 +163,23 @@ function App() {
     setBlockInfo(info)
   }
 
+  // Andra spelare = en markör per ägare (vid en av deras zoner)
+  const buildOtherPlayers = (data, meId) => {
+    const byOwner = {}
+    data.forEach((z) => {
+      if (!z.owner_id || z.owner_id === meId) return
+      if (!byOwner[z.owner_id]) {
+        byOwner[z.owner_id] = {
+          id: z.owner_id,
+          name: z.owner_name || `Spelare ${z.owner_id}`,
+          lat: z.lat,
+          lng: z.lng,
+        }
+      }
+    })
+    setOtherPlayers(Object.values(byOwner))
+  }
+
   const fetchZones = () => {
     fetch(`${API_URL}/zones`)
       .then((r) => r.json())
@@ -143,6 +187,7 @@ function App() {
         setZones(data)
         setStatus(`${data.length} zoner`)
         updateBlockInfo(data)
+        buildOtherPlayers(data, myUserId)
       })
       .catch(() => setStatus('Kunde inte hämta zoner'))
   }
@@ -164,6 +209,20 @@ function App() {
       .catch(() => {})
   }
 
+  const fetchLeaderboard = () => {
+    fetch(`${API_URL}/leaderboard`)
+      .then((r) => r.json())
+      .then((data) => setLeaderboard(Array.isArray(data) ? data : []))
+      .catch(() => setLeaderboard([]))
+  }
+
+  const fetchMedals = (name = username) => {
+    fetch(`${API_URL}/medals/${encodeURIComponent(name)}`)
+      .then((r) => r.json())
+      .then((data) => setMedals(Array.isArray(data) ? data : data.medals || []))
+      .catch(() => setMedals([]))
+  }
+
   useEffect(() => {
     fetchZones()
     fetchPlayer()
@@ -180,7 +239,6 @@ function App() {
     return () => clearInterval(t)
   }, [])
 
-  // Nytt spelarnamn → nollställ sessionräknare
   useEffect(() => {
     setZonesTakenCount(0)
     setMyUserId(null)
@@ -189,10 +247,14 @@ function App() {
     fetchPlayer(username)
   }, [username])
 
-  const canTake = () => gpsEnabled === true && playerPos !== null
+  useEffect(() => {
+    if (zones.length) buildOtherPlayers(zones, myUserId)
+  }, [myUserId, zones])
+
+  const canTake = () =>
+    gpsEnabledRef.current === true && playerPosRef.current !== null
 
   const getSeconds = () => {
-    // Första zonen denna session: 15 s. Därefter 10 s bara om GPS+position.
     if (zonesTakenCount === 0) return BASE_SECONDS
     if (canTake()) return GPS_SECONDS
     return BASE_SECONDS
@@ -200,9 +262,8 @@ function App() {
 
   const startTakeover = (zoneId) => {
     if (takingZoneId) return
-
     if (!canTake()) {
-      setMessage('GPS måste vara PÅ och position OK för att ta zon')
+      setMessage('GPS måste vara PÅ och position OK')
       return
     }
     if (blockInfo[zoneId] > 0) {
@@ -218,12 +279,11 @@ function App() {
 
     const start = Date.now()
     progressRef.current = setInterval(() => {
-      // Om GPS stängs av under tagning → avbryt
-      if (!gpsEnabled || !playerPos) {
+      if (!gpsEnabledRef.current || !playerPosRef.current) {
         clearInterval(progressRef.current)
         setTakingZoneId(null)
         setProgress(0)
-        setMessage('Zontagning avbruten – GPS krävs')
+        setMessage('Avbruten – GPS stängdes av')
         return
       }
       const elapsed = (Date.now() - start) / 1000
@@ -236,7 +296,7 @@ function App() {
   }
 
   const finishTakeover = (zoneId) => {
-    if (!gpsEnabled || !playerPos) {
+    if (!gpsEnabledRef.current || !playerPosRef.current) {
       setMessage('GPS krävs – tagning avbruten')
       setTakingZoneId(null)
       setProgress(0)
@@ -262,13 +322,13 @@ function App() {
           setZonesTakenCount((c) => c + 1)
           if (data.totalPoints != null) setTotalPoints(data.totalPoints)
           if (data.userId) setMyUserId(data.userId)
-          // Sätt block direkt lokalt
           setBlockInfo((prev) => ({
             ...prev,
             [zoneId]: BLOCK_MINUTES * 60,
           }))
           fetchZones()
           fetchPlayer()
+          fetchMedals()
         }
       })
       .catch(() => setMessage('Nätverksfel'))
@@ -285,53 +345,72 @@ function App() {
     setMessage('Avbruten')
   }
 
-  const getZoneColor = (zone) => {
+  const zoneColor = (zone) => {
     if (!zone.owner_id) return 'gold'
     if (myUserId && zone.owner_id === myUserId) return 'lime'
-    return 'red'
+    return '#ef4444'
   }
 
   const doSearch = () => {
     const q = search.trim().toLowerCase()
     if (!q) return
 
-    // Zonsök
-    const zone = zones.find((z) => z.name.toLowerCase().includes(q))
+    const zone = zones.find((z) =>
+      (z.name || '').toLowerCase().includes(q)
+    )
     if (zone) {
-      setFlyTarget([zone.lat, zone.lng])
+      setFlyTarget([Number(zone.lat), Number(zone.lng)])
       setShowProfile(false)
-      setMessage(`Visar zon: ${zone.name}`)
+      setTab(null)
+      setMessage(`Zon: ${zone.name}`)
       return
     }
 
-    // Spelarsök
     fetch(`${API_URL}/player/${encodeURIComponent(search.trim())}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.exists) {
           setProfile(data)
           setShowProfile(true)
+          setTab(null)
           setMessage(`Profil: ${data.username}`)
+          // Om spelaren äger en zon – flytta kartan dit
+          if (data.zones?.length) {
+            const z = zones.find((x) => x.id === data.zones[0].id)
+            if (z) setFlyTarget([Number(z.lat), Number(z.lng)])
+          }
         } else {
           setMessage('Hittade varken zon eller spelare')
-          setShowProfile(false)
         }
       })
       .catch(() => setMessage('Sökfel'))
   }
 
-  const goNorth = () => {
-    if (playerPos) setFlyTarget([...playerPos])
-    setNorthTick((n) => n + 1)
-    setMessage('Norr upp / centrerad på dig')
+  const openLeaderboard = () => {
+    setTab('leaderboard')
+    setShowProfile(false)
+    fetchLeaderboard()
+  }
+
+  const openMedals = () => {
+    setTab('medals')
+    setShowProfile(false)
+    fetchMedals()
   }
 
   const total = getSeconds()
   const left = Math.ceil(total - (progress / 100) * total)
 
+  const MEDAL_INFO = {
+    first_take: { name: 'Första tagningen', icon: '🥇' },
+    zones_5: { name: '5 zoner', icon: '🥉' },
+    zones_10: { name: '10 zoner', icon: '🥈' },
+    points_500: { name: '500 poäng', icon: '⭐' },
+    points_1000: { name: '1000 poäng', icon: '🌟' },
+  }
+
   return (
     <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
-      {/* Panel */}
       <div
         style={{
           position: 'absolute',
@@ -359,25 +438,24 @@ function App() {
         </div>
         <div style={{ marginBottom: 6 }}>
           <strong>Egna zoner:</strong> {myZones.length}
-          {myZones.length > 0 && (
-            <div style={{ fontSize: 12 }}>
-              {myZones.map((z) => z.name).join(', ')}
-            </div>
-          )}
         </div>
 
-        <div style={{ marginBottom: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button onClick={() => setGpsEnabled((v) => !v)}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+          <button
+            onClick={() => setGpsEnabled((v) => !v)}
+          >
             GPS: {gpsEnabled ? 'På' : 'Av'}
           </button>
           <button onClick={toggleAudio}>
             Ljud: {audioEnabled ? 'På' : 'Av'}
           </button>
+          <button onClick={openLeaderboard}>Tabell</button>
+          <button onClick={openMedals}>Medaljer</button>
         </div>
+
         <div style={{ fontSize: 12, marginBottom: 6 }}>
-          {playerPos ? 'Position OK' : 'Ingen position'}
-          {' · '}
-          Taketid: {getSeconds()} s
+          {playerPos ? 'Position OK' : 'Ingen position'} · Taketid:{' '}
+          {getSeconds()} s
         </div>
 
         <div style={{ marginBottom: 6 }}>
@@ -399,30 +477,57 @@ function App() {
         )}
       </div>
 
-      {/* Kompass */}
-      <button
-        onClick={goNorth}
-        title="Norr upp / centrera på mig"
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          zIndex: 1000,
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          border: '2px solid #333',
-          background: 'white',
-          fontWeight: 'bold',
-          fontSize: 18,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-          cursor: 'pointer',
-        }}
-      >
-        <span style={{ color: 'crimson' }}>N</span>
-      </button>
+      {/* Tabell / medaljer */}
+      {tab && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 70,
+            right: 12,
+            zIndex: 1000,
+            background: 'white',
+            padding: 14,
+            borderRadius: 8,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+            width: 260,
+            maxHeight: '70vh',
+            overflow: 'auto',
+            fontSize: 14,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <strong>{tab === 'leaderboard' ? 'Topplista' : 'Medaljer'}</strong>
+            <button onClick={() => setTab(null)}>×</button>
+          </div>
+          {tab === 'leaderboard' && (
+            <ol style={{ paddingLeft: 20, marginTop: 8 }}>
+              {leaderboard.length === 0 && <li>Inga spelare ännu</li>}
+              {leaderboard.map((p, i) => (
+                <li key={p.username || i}>
+                  {p.username} – {p.total_points} p
+                </li>
+              ))}
+            </ol>
+          )}
+          {tab === 'medals' && (
+            <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+              {medals.length === 0 && <li>Inga medaljer ännu</li>}
+              {medals.map((m, i) => {
+                const info = MEDAL_INFO[m.medal_type] || {
+                  name: m.medal_type,
+                  icon: '🏅',
+                }
+                return (
+                  <li key={i}>
+                    {info.icon} {info.name}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
-      {/* Spelarprofil */}
       {showProfile && profile && (
         <div
           style={{
@@ -444,37 +549,11 @@ function App() {
           </div>
           <div>Poäng: {profile.total_points}</div>
           <div style={{ marginTop: 8 }}>
-            <strong>Zoner ({profile.zones?.length || 0}):</strong>
-            <ul style={{ margin: '4px 0', paddingLeft: 18 }}>
-              {(profile.zones || []).map((z) => (
-                <li key={z.id}>
-                  <button
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#06c',
-                      cursor: 'pointer',
-                      padding: 0,
-                      textAlign: 'left',
-                    }}
-                    onClick={() => {
-                      const found = zones.find((x) => x.id === z.id)
-                      if (found) {
-                        setFlyTarget([found.lat, found.lng])
-                        setShowProfile(false)
-                      }
-                    }}
-                  >
-                    {z.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            Zoner: {(profile.zones || []).map((z) => z.name).join(', ') || '–'}
           </div>
         </div>
       )}
 
-      {/* Progress */}
       {takingZoneId && (
         <div
           style={{
@@ -521,8 +600,9 @@ function App() {
         </div>
       )}
 
+      {/* center bara initialt – inte bunden till playerPos */}
       <MapContainer
-        center={playerPos || [59.33, 18.07]}
+        center={[59.33, 18.07]}
         zoom={13}
         style={{ height: '100%', width: '100%' }}
       >
@@ -530,30 +610,29 @@ function App() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap"
         />
-        <MapController flyTarget={flyTarget} resetNorth={northTick} />
+        <MapController flyTarget={flyTarget} />
 
         {playerPos && (
-          <CircleMarker
-            center={playerPos}
-            radius={9}
-            pathOptions={{
-              color: 'blue',
-              fillColor: '#2196F3',
-              fillOpacity: 0.9,
-            }}
-          />
+          <Marker position={playerPos} icon={makePersonIcon('green')}>
+            <Popup>Du ({username})</Popup>
+          </Marker>
         )}
 
+        {otherPlayers.map((p) => (
+          <Marker
+            key={p.id}
+            position={[p.lat, p.lng]}
+            icon={makePersonIcon('red')}
+          >
+            <Popup>{p.name}</Popup>
+          </Marker>
+        ))}
+
         {zones.map((zone) => (
-          <CircleMarker
+          <Marker
             key={zone.id}
-            center={[zone.lat, zone.lng]}
-            radius={14}
-            pathOptions={{
-              color: getZoneColor(zone),
-              fillColor: getZoneColor(zone),
-              fillOpacity: 0.75,
-            }}
+            position={[zone.lat, zone.lng]}
+            icon={makeZoneIcon(zoneColor(zone))}
           >
             <Popup>
               <strong>{zone.name}</strong>
@@ -583,22 +662,16 @@ function App() {
                   marginTop: 8,
                   padding: '6px 12px',
                   opacity: !canTake() || blockInfo[zone.id] > 0 ? 0.5 : 1,
-                  cursor:
-                    !canTake() || blockInfo[zone.id] > 0
-                      ? 'not-allowed'
-                      : 'pointer',
                 }}
               >
                 {!canTake()
                   ? 'Kräver GPS'
                   : blockInfo[zone.id] > 0
                   ? 'Blockerad'
-                  : takingZoneId === zone.id
-                  ? 'Tar över...'
                   : 'Ta över'}
               </button>
             </Popup>
-          </CircleMarker>
+          </Marker>
         ))}
       </MapContainer>
     </div>
