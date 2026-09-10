@@ -1,4 +1,4 @@
-import express from 'express';
+7import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import pg from 'pg';
@@ -356,6 +356,33 @@ app.get('/takeover-test/:id', async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/player/:username', async (req, res) => {
+  try {
+    const username = req.params.username;
+    const userResult = await pool.query(
+      'SELECT id, username, total_points FROM users WHERE username = $1',
+      [username]
+    );
+    if (userResult.rows.length === 0) {
+      return res.json({ exists: false, total_points: 0, zones: [] });
+    }
+    const user = userResult.rows[0];
+    const zonesResult = await pool.query(
+      `SELECT id, name, points_value FROM zones WHERE owner_id = $1 ORDER BY name`,
+      [user.id]
+    );
+    res.json({
+      exists: true,
+      id: user.id,
+      username: user.username,
+      total_points: user.total_points,
+      zones: zonesResult.rows
+    });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
