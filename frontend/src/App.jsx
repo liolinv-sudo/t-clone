@@ -683,49 +683,6 @@ function App() {
 
 
             
-  const finishTakeover = (zoneId) => {
-    if (!gpsEnabledRef.current || !playerPosRef.current) {
-      setMessage('GPS krävs – tagning avbruten')
-      setTakingZoneId(null)
-      setProgress(0)
-      return
-    }
-
-    fetch(
-      `${API_URL}/takeover-test/${zoneId}?username=${encodeURIComponent(
-        username
-      )}`
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        setMessage(data.message || 'Fel')
-        if (data.blocked && data.remainingSeconds) {
-          setBlockInfo((prev) => ({
-            ...prev,
-            [zoneId]: data.remainingSeconds,
-          }))
-        }
-        if (data.success) {
-          speak('Zone taken')
-          setZonesTakenCount((c) => c + 1)
-          if (data.totalPoints != null) setTotalPoints(data.totalPoints)
-          if (data.userId) setMyUserId(data.userId)
-          setBlockInfo((prev) => ({
-            ...prev,
-            [zoneId]: BLOCK_MINUTES * 60,
-          }))
-          fetchZones()
-          fetchPlayer()
-          fetchMedals()
-        }
-      })
-      .catch(() => setMessage('Nätverksfel'))
-      .finally(() => {
-        setTakingZoneId(null)
-        setProgress(0)
-      })
-  }
-
   const cancelTakeover = () => {
     if (progressRef.current) clearInterval(progressRef.current)
     setTakingZoneId(null)
