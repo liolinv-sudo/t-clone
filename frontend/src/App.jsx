@@ -638,11 +638,55 @@ function App() {
             <Popup>
               <strong>{zone.name}</strong>
               <br />
-              {zone.owner_name
-                ? `Ägare: ${zone.owner_name}`
-                : zone.owner_id
-                ? `Ägare-id: ${zone.owner_id}`
-                : 'Neutral (+50)'}
+                            {zone.owner_name ? (
+                <>
+                  Ägare:{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetch(
+                        `${API_URL}/player/${encodeURIComponent(zone.owner_name)}`
+                      )
+                        .then((r) => r.json())
+                        .then((data) => {
+                          if (data.exists) {
+                            setProfile(data)
+                            setShowProfile(true)
+                            setTab(null)
+                            fetch(
+                              `${API_URL}/medals/${encodeURIComponent(
+                                zone.owner_name
+                              )}`
+                            )
+                              .then((r) => r.json())
+                              .then((m) =>
+                                setMedals(
+                                  Array.isArray(m) ? m : m.medals || []
+                                )
+                              )
+                              .catch(() => {})
+                          }
+                        })
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#06c',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      padding: 0,
+                      font: 'inherit',
+                    }}
+                  >
+                    {zone.owner_name}
+                  </button>
+                </>
+              ) : zone.owner_id ? (
+                `Ägare-id: ${zone.owner_id}`
+              ) : (
+                'Neutral (+50)'
+              )}
+              
               <br />
               Poäng: {zone.points_value}
               <br />
