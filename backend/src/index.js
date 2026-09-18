@@ -397,6 +397,37 @@ app.get('/player/:username', async (req, res) => {
   }
 });
 
+app.get('/leaderboard', async (req, res) => {
+  try {
+    const result = await pool.query(          
+      `SELECT username, total_points
+       FROM users
+       ORDER BY total_points DESC
+       LIMIT 20
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/medals/:username', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT m.medal_type, m.earned_at
+       FROM medals m
+       JOIN users u ON u.id = m.user_id
+       WHERE u.username = $1
+       ORDER BY m.earned_at`,
+      [req.params.username]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // Starta servern (denna ska alltid vara sist)
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
