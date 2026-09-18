@@ -504,10 +504,43 @@ function App() {
             <ol style={{ paddingLeft: 20, marginTop: 8 }}>
               {leaderboard.length === 0 && <li>Inga spelare ännu</li>}
               {leaderboard.map((p, i) => (
-                <li key={p.username || i}>
-                  {p.username} – {p.total_points} p
-                </li>
-              ))}
+  <li key={p.username || i}>
+    <button
+      type="button"
+      onClick={() => {
+        fetch(`${API_URL}/player/${encodeURIComponent(p.username)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.exists) {
+              setProfile(data)
+              setShowProfile(true)
+              setTab(null)
+              fetch(`${API_URL}/medals/${encodeURIComponent(p.username)}`)
+                .then((r) => r.json())
+                .then((m) =>
+                  setMedals(Array.isArray(m) ? m : m.medals || [])
+                )
+                .catch(() => {})
+            }
+          })
+      }}
+      style={{
+        background: 'none',
+        border: 'none',
+        color: '#06c',
+        textDecoration: 'underline',
+        cursor: 'pointer',
+        padding: 0,
+        font: 'inherit',
+      }}
+    >
+      {p.username}
+    </button>
+    {' – '}
+    {p.total_points} p
+    {p.round_points != null ? ` (runda: ${p.round_points})` : ''}
+  </li>
+))}
             </ol>
           )}
           {tab === 'medals' && (
