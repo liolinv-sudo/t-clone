@@ -121,6 +121,16 @@ app.get('/init-db', async (req, res) => {
       CREATE INDEX IF NOT EXISTS zones_location_idx ON zones USING GIST (location);
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medals (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        medal_type VARCHAR(50) NOT NULL,
+        earned_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, medal_type)
+      );
+    `);
+    
     res.json({ success: true, message: 'Tabeller skapade / uppdaterade!' });
   } catch (err) {
     console.error(err);
