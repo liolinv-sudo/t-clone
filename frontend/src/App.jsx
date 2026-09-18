@@ -682,35 +682,6 @@ function App() {
 // VAD nedanför är felaktigt?
 
 
-
-  // GPS
-  useEffect(() => {
-    if (!gpsEnabled) {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
-        watchIdRef.current = null
-      }
-      setPlayerPos(null)
-      setZonesTakenCount(0) // återställ taketid till 15 s
-      return
-    }
-    if (!navigator.geolocation) {
-      setMessage('GPS stöds inte')
-      setGpsEnabled(false)
-      return
-    }
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => setPlayerPos([pos.coords.latitude, pos.coords.longitude]),
-      () => setMessage('Tillåt plats i webbläsaren'),
-      { enableHighAccuracy: true }
-    )
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
-      }
-    }
-  }, [gpsEnabled])
-
   const updateBlockInfo = (data) => {
     const info = {}
     const now = Date.now()
