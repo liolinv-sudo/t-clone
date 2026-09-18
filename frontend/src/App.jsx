@@ -682,78 +682,7 @@ function App() {
 // VAD nedanför är felaktigt?
 
 
-  useEffect(() => {
-    fetchZones()
-    fetchPlayer()
-    const t = setInterval(() => {
-      setBlockInfo((prev) => {
-        const next = {}
-        Object.keys(prev).forEach((id) => {
-          const v = prev[id] - 1
-          if (v > 0) next[id] = v
-        })
-        return next
-      })
-    }, 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  useEffect(() => {
-    setZonesTakenCount(0)
-    setMyUserId(null)
-    setMyZones([])
-    setTotalPoints(0)
-    fetchPlayer(username)
-  }, [username])
-
-  useEffect(() => {
-    if (zones.length) buildOtherPlayers(zones, myUserId)
-  }, [myUserId, zones])
-
-  const canTake = () =>
-    gpsEnabledRef.current === true && playerPosRef.current !== null
-
-  const getSeconds = () => {
-    if (zonesTakenCount === 0) return BASE_SECONDS
-    if (canTake()) return GPS_SECONDS
-    return BASE_SECONDS
-  }
-
-  const startTakeover = (zoneId) => {
-    if (takingZoneId) return
-    if (!canTake()) {
-      setMessage('GPS måste vara PÅ och position OK')
-      return
-    }
-    if (blockInfo[zoneId] > 0) {
-      setMessage(`Blockerad: ${formatTime(blockInfo[zoneId])}`)
-      return
-    }
-
-    const total = getSeconds()
-    setTakingZoneId(zoneId)
-    setProgress(0)
-    setMessage(`Tar över (${total} s)...`)
-    speak('Taking zone')
-
-    const start = Date.now()
-    progressRef.current = setInterval(() => {
-      if (!gpsEnabledRef.current || !playerPosRef.current) {
-        clearInterval(progressRef.current)
-        setTakingZoneId(null)
-        setProgress(0)
-        setMessage('Avbruten – GPS stängdes av')
-        return
-      }
-      const elapsed = (Date.now() - start) / 1000
-      setProgress(Math.min(100, (elapsed / total) * 100))
-      if (elapsed >= total) {
-        clearInterval(progressRef.current)
-        finishTakeover(zoneId)
-      }
-    }, 100)
-  }
-
+            
   const finishTakeover = (zoneId) => {
     if (!gpsEnabledRef.current || !playerPosRef.current) {
       setMessage('GPS krävs – tagning avbruten')
