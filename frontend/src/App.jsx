@@ -682,65 +682,6 @@ function App() {
 // VAD nedanför är felaktigt?
 
 
-  const updateBlockInfo = (data) => {
-    const info = {}
-    const now = Date.now()
-    data.forEach((z) => {
-      if (z.last_taken) {
-        const end =
-          new Date(z.last_taken).getTime() + BLOCK_MINUTES * 60 * 1000
-        const left = Math.ceil((end - now) / 1000)
-        if (left > 0) info[z.id] = left
-      }
-    })
-    setBlockInfo(info)
-  }
-
-  // Andra spelare = en markör per ägare (vid en av deras zoner)
-  const buildOtherPlayers = (data, meId) => {
-    const byOwner = {}
-    data.forEach((z) => {
-      if (!z.owner_id || z.owner_id === meId) return
-      if (!byOwner[z.owner_id]) {
-        byOwner[z.owner_id] = {
-          id: z.owner_id,
-          name: z.owner_name || `Spelare ${z.owner_id}`,
-          lat: z.lat,
-          lng: z.lng,
-        }
-      }
-    })
-    setOtherPlayers(Object.values(byOwner))
-  }
-
-  const fetchZones = () => {
-    fetch(`${API_URL}/zones`)
-      .then((r) => r.json())
-      .then((data) => {
-        setZones(data)
-        setStatus(`${data.length} zoner`)
-        updateBlockInfo(data)
-        buildOtherPlayers(data, myUserId)
-      })
-      .catch(() => setStatus('Kunde inte hämta zoner'))
-  }
-
-  const fetchPlayer = (name = username) => {
-    fetch(`${API_URL}/player/${encodeURIComponent(name)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.exists) {
-          setTotalPoints(data.total_points || 0)
-          setMyZones(data.zones || [])
-          setMyUserId(data.id)
-        } else {
-          setTotalPoints(0)
-          setMyZones([])
-          setMyUserId(null)
-        }
-      })
-      .catch(() => {})
-  }
 
   const fetchLeaderboard = () => {
     fetch(`${API_URL}/leaderboard`)
