@@ -682,78 +682,7 @@ function App() {
 // VAD nedanför är felaktigt?
 
 
-            
-  const cancelTakeover = () => {
-    if (progressRef.current) clearInterval(progressRef.current)
-    setTakingZoneId(null)
-    setProgress(0)
-    setMessage('Avbruten')
-  }
-
-  const zoneColor = (zone) => {
-    if (!zone.owner_id) return 'gold'
-    if (myUserId && zone.owner_id === myUserId) return 'lime'
-    return '#ef4444'
-  }
-
-  const doSearch = () => {
-    const q = search.trim().toLowerCase()
-    if (!q) return
-
-    const zone = zones.find((z) =>
-      (z.name || '').toLowerCase().includes(q)
-    )
-    if (zone) {
-      setFlyTarget([Number(zone.lat), Number(zone.lng)])
-      setShowProfile(false)
-      setTab(null)
-      setMessage(`Zon: ${zone.name}`)
-      return
-    }
-
-    fetch(`${API_URL}/player/${encodeURIComponent(search.trim())}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.exists) {
-          setProfile(data)
-          setShowProfile(true)
-          setTab(null)
-          setMessage(`Profil: ${data.username}`)
-          // Om spelaren äger en zon – flytta kartan dit
-          if (data.zones?.length) {
-            const z = zones.find((x) => x.id === data.zones[0].id)
-            if (z) setFlyTarget([Number(z.lat), Number(z.lng)])
-          }
-        } else {
-          setMessage('Hittade varken zon eller spelare')
-        }
-      })
-      .catch(() => setMessage('Sökfel'))
-  }
-
-  const openLeaderboard = () => {
-    setTab('leaderboard')
-    setShowProfile(false)
-    fetchLeaderboard()
-  }
-
-  const openMedals = () => {
-    setTab('medals')
-    setShowProfile(false)
-    fetchMedals()
-  }
-
-  const total = getSeconds()
-  const left = Math.ceil(total - (progress / 100) * total)
-
-  const MEDAL_INFO = {
-    first_take: { name: 'Första tagningen', icon: '🥇' },
-    zones_5: { name: '5 zoner', icon: '🥉' },
-    zones_10: { name: '10 zoner', icon: '🥈' },
-    points_500: { name: '500 poäng', icon: '⭐' },
-    points_1000: { name: '1000 poäng', icon: '🌟' },
-  }
-
+      
   return (
     <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
       <div
