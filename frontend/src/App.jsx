@@ -528,7 +528,7 @@ function App() {
           )}
         </div>
       )}
-
+      
       {showProfile && profile && (
         <div
           style={{
@@ -540,8 +540,10 @@ function App() {
             padding: 14,
             borderRadius: 8,
             boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
-            width: 240,
+            width: 260,
             fontSize: 14,
+            maxHeight: '70vh',
+            overflow: 'auto',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -550,8 +552,34 @@ function App() {
           </div>
           <div>Poäng: {profile.total_points}</div>
           <div style={{ marginTop: 8 }}>
-            Zoner: {(profile.zones || []).map((z) => z.name).join(', ') || '–'}
+            <strong>Zoner:</strong>{' '}
+            {(profile.zones || []).map((z) => z.name).join(', ') || '–'}
           </div>
+          <div style={{ marginTop: 8 }}>
+            <strong>Medaljer:</strong>
+            <ul style={{ margin: '4px 0', paddingLeft: 18 }}>
+              {medals.length === 0 && <li>Inga ännu</li>}
+              {medals.map((m, i) => {
+                const info = MEDAL_INFO[m.medal_type] || {
+                  name: m.medal_type,
+                  icon: '🏅',
+                }
+                return (
+                  <li key={i}>
+                    {info.icon} {info.name}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          <button
+            style={{ marginTop: 10, padding: '6px 10px' }}
+            onClick={() =>
+              setMessage(`Chatt med ${profile.username} kommer i nästa steg`)
+            }
+          >
+            Starta chatt
+          </button>
         </div>
       )}
 
