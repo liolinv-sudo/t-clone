@@ -678,17 +678,8 @@ function App() {
   )
 }
 
-export default Appom'
-const BASE_SECONDS = 15
-const GPS_SECONDS = 10
-const BLOCK_MINUTES = 5
 
-function formatTime(sec) {
-  const s = Math.max(0, Math.floor(sec))
-  const m = Math.floor(s / 60)
-  const r = s % 60
-  return `${m} min ${r} sek`
-}
+// VAD nedanför är felaktigt?
 
 function makePersonIcon(color) {
   const bg = color === 'green' ? '#22c55e' : '#ef4444'
