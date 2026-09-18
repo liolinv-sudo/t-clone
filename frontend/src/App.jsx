@@ -682,21 +682,6 @@ function App() {
 // VAD nedanför är felaktigt?
 
 
-
-  const fetchLeaderboard = () => {
-    fetch(`${API_URL}/leaderboard`)
-      .then((r) => r.json())
-      .then((data) => setLeaderboard(Array.isArray(data) ? data : []))
-      .catch(() => setLeaderboard([]))
-  }
-
-  const fetchMedals = (name = username) => {
-    fetch(`${API_URL}/medals/${encodeURIComponent(name)}`)
-      .then((r) => r.json())
-      .then((data) => setMedals(Array.isArray(data) ? data : data.medals || []))
-      .catch(() => setMedals([]))
-  }
-
   useEffect(() => {
     fetchZones()
     fetchPlayer()
