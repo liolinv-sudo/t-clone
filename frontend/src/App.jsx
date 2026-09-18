@@ -82,7 +82,8 @@ function App() {
   const [leaderboard, setLeaderboard] = useState([])
   const [medals, setMedals] = useState([])
   const [otherPlayers, setOtherPlayers] = useState([])
-
+  
+  const gpsHoldRef = useRef(null)
   const watchIdRef = useRef(null)
   const progressRef = useRef(null)
   const gpsEnabledRef = useRef(false)
