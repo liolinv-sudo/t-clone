@@ -9,16 +9,7 @@ import {
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-const API_URL = 'https://t-clone-api.onrender.cimport { useEffect, useState, useRef } from 'react'
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  useMap,
-} from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+
 
 const API_URL = 'https://t-clone-api.onrender.com'
 const BASE_SECONDS = 15
