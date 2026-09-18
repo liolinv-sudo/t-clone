@@ -682,17 +682,6 @@ function App() {
 // VAD nedanför är felaktigt?
 
 
-  const toggleAudio = () => {
-    if (audioEnabled) {
-      window.speechSynthesis?.cancel()
-      setAudioEnabled(false)
-      setMessage('Ljud av')
-    } else if (window.speechSynthesis) {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance('Audio on'))
-      setAudioEnabled(true)
-      setMessage('Ljud på')
-    }
-  }
 
   // GPS
   useEffect(() => {
