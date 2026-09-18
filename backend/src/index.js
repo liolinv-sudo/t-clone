@@ -354,7 +354,30 @@ app.get('/takeover-test/:id', async (req, res) => {
       'UPDATE users SET total_points = total_points + $1 WHERE id = $2 RETURNING total_points',
       [points, userId]
     );
+    
+    // Räkna zoner spelaren äger
+    const owned = await pool.query(
+      'SELECT COUNT(*)::int AS c FROM zones WHERE owner_id = $1',
+      [userId]
+    );
+    const zoneCount = owned.rows[0].c;
+    const pts = updated.rows[0].total_points;
 
+    const awards = [];
+    if (zoneCount >= 1) awards.push('first_take');
+    if (zoneCount >= 5) awards.push('zones_5');
+    if (zoneCount >= 10) awards.push('zones_10');
+    if (pts >= 500) awards.push('points_500');
+    if (pts >= 1000) awards.push('points_1000');
+
+    for (const type of awards) {
+      await pool.query(
+        `INSERT INTO medals (user_id, medal_type)
+         VALUES ($1, $2) ON CONFLICT (user_id, medal_type) DO NOTHING`,
+        [userId, type]
+      );
+    }
+    
     res.json({
       success: true,
       message: `Du tog över "${zone.name}"! +${points} poäng`,
