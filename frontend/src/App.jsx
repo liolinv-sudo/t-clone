@@ -9,8 +9,6 @@ import {
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-
-
 const API_URL = 'https://t-clone-api.onrender.com'
 const BASE_SECONDS = 15
 const GPS_SECONDS = 10
