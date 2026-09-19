@@ -410,6 +410,23 @@ function App() {
     points_1000: { name: '1000 poäng', icon: '🌟' },
   }
 
+  const LEVEL_INFO = [
+    { level: 1, name: 'Nybörjare', min: 0, desc: 'Du har precis börjat.' },
+    { level: 2, name: 'Vandrare', min: 500, desc: 'Du tar zoner regelbundet.' },
+    { level: 3, name: 'Erfaren', min: 1500, desc: 'Stabil poängsamlare.' },
+    { level: 4, name: 'Veteran', min: 3000, desc: 'Känd i området.' },
+    { level: 5, name: 'Mästare', min: 5000, desc: 'Toppskiktet.' },
+  ]
+
+  const levelInfo = (lvl) =>
+    LEVEL_INFO.find((x) => x.level === lvl) || {
+      level: lvl,
+      name: `Level ${lvl}`,
+      desc: 'Högre nivå',
+    }
+
+  return (
+
   return (
     <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
       <div
